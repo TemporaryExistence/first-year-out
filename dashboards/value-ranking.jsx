@@ -504,6 +504,11 @@ export default function Dashboard({ dashboard, givens }) {
     };
   }).sort((a, b) => a.bin - b.bin);
   const binOrder = distRows.map((d) => d.label);
+  // Where the MIDDLE programme sits. A distribution only teaches if the reader
+  // can find "typical" on it, so the median bin is marked on the chart.
+  const distTotal = distRows.reduce((a, d) => a + d.programs, 0);
+  let running = 0, medianBin = null;
+  for (const d of distRows) { running += d.programs; if (medianBin === null && running >= distTotal / 2) medianBin = d.label; }
 
   const dumbbell = [];
   (big.rows || []).forEach((r) => {
@@ -540,8 +545,24 @@ export default function Dashboard({ dashboard, givens }) {
         {pts.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Nothing matches these filters.</div> : (
           <Chart ink={ink} height={380} data={pts} spec={{
             layer: [
+              { data: { values: [{ x: 0, yTop: 0, yBot: 0 }, { x: axisMax, yTop: axisMax, yBot: 0 }] },
+                mark: { type: "area", color: BAND.vheavy, opacity: 0.08, line: false },
+                encoding: { x: { field: "x", type: "quantitative" },
+                            y: { field: "yTop", type: "quantitative" }, y2: { field: "yBot" } } },
               { data: { values: [{ x: 0, y: 0 }, { x: axisMax, y: axisMax }] },
                 mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
+                encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
+              { data: { values: [{ x: axisMax * 0.04, y: axisMax * 0.94 }] },
+                mark: { type: "text", text: "pay beats debt", align: "left", baseline: "top",
+                        fontSize: 11, fontWeight: 600, color: BAND.light, opacity: 0.92 },
+                encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
+              { data: { values: [{ x: axisMax * 0.97, y: axisMax * 0.06 }] },
+                mark: { type: "text", text: "debt exceeds a year of pay", align: "right", baseline: "bottom",
+                        fontSize: 11, fontWeight: 600, color: BAND.vheavy, opacity: 0.85 },
+                encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
+              { data: { values: [{ x: axisMax * 0.62, y: axisMax * 0.62 }] },
+                mark: { type: "text", text: "break-even", dy: -7, align: "right", baseline: "bottom",
+                        fontSize: 10.5, color: ink.muted, opacity: 0.9 },
                 encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
               { mark: { type: "circle", opacity: 0.72 },
                 encoding: {
@@ -566,10 +587,13 @@ export default function Dashboard({ dashboard, givens }) {
         <Card ink={ink} title="The shape of it"
               note="Programs at each debt level.">
           {distRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No data.</div> : (
-            <Chart ink={ink} height={230} data={distRows} spec={{
-              mark: { type: "bar", cornerRadiusEnd: 2, width: { band: 0.82 } },
+            <Chart ink={ink} height={250} data={distRows} spec={{
               encoding: {
                 x: { field: "label", type: "ordinal", title: "Debt as a multiple of one year's pay", sort: binOrder, axis: { labelAngle: 0 } },
+              },
+              layer: [
+              { mark: { type: "bar", cornerRadiusEnd: 2, width: { band: 0.82 } },
+              encoding: {
                 y: { field: "programs", type: "quantitative", title: "Programs" },
                 color: { field: "band", type: "nominal", scale: { domain: BAND_DOMAIN, range: BAND_RANGE }, legend: null },
                 tooltip: [
@@ -577,7 +601,16 @@ export default function Dashboard({ dashboard, givens }) {
                   { field: "programs", title: "Programs", format: ",.0f" },
                   { field: "band", title: "Band" },
                 ],
-              },
+              } },
+              { data: { values: medianBin ? [{ label: medianBin }] : [] },
+                mark: { type: "rule", color: ink.text, opacity: 0.6, strokeDash: [4, 3], strokeWidth: 1.5 },
+                encoding: { x: { field: "label", type: "ordinal", sort: binOrder } } },
+              { data: { values: medianBin ? [{ label: medianBin }] : [] },
+                mark: { type: "text", text: "typical program", dy: -6, align: "center", baseline: "bottom",
+                        fontSize: 10.5, fontWeight: 600, color: ink.text, opacity: 0.75, yOffset: 0 },
+                encoding: { x: { field: "label", type: "ordinal", sort: binOrder },
+                            y: { datum: 0, type: "quantitative" } } },
+              ],
             }} />
           )}
           <div style={{ display: "grid", gap: 5, marginTop: 12 }}>
