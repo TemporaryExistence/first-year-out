@@ -1,0 +1,46 @@
+##! experimental { access_modifiers givens }
+
+import "../index.malloy"
+
+// "I'm looking at this school - which of its programs actually pay off?"
+// Every reported program at one institution, ranked.
+
+given:
+  # label="School" control=select suggest { source=programs dimension=school }
+  SCHOOL :: filter<string> is f'North Carolina State University at Raleigh'
+
+#" Headline for this school
+# artifact { title="School profile" }
+query: school_headline is programs -> {
+  where: school ~ $SCHOOL and credential ~ $CREDENTIAL
+  aggregate:
+    programs_reported is program_count
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+}
+
+#" Every reported program here, best value first
+query: school_programs is programs -> {
+  where: school ~ $SCHOOL and credential ~ $CREDENTIAL and grads_per_year ~ $MIN_GRADS
+  group_by: field, credential
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: ratio asc
+  limit: 200
+}
+
+#" What this school offers, by credential level
+query: school_by_level is programs -> {
+  where: school ~ $SCHOOL
+  group_by: credential
+  aggregate:
+    programs_at_level is program_count
+    earnings is med_earnings
+    ratio is avg_debt_ratio
+  order_by: programs_at_level desc
+}

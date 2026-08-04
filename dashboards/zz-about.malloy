@@ -1,0 +1,34 @@
+##! experimental { access_modifiers givens }
+
+import "../index.malloy"
+
+// About / methodology. The coverage numbers are QUERIED, not hand-written, so
+// this page cannot drift from the data it is describing.
+
+#" What is actually in here
+# artifact { title="About the data" }
+query: coverage is programs -> {
+  aggregate:
+    total_programs is program_count
+    graduates is total_grads
+}
+
+// Distinct counts are pipelines (group, then count the groups) rather than a
+// distinct-count aggregate, which is not a thing you can call on a dimension.
+#" Distinct schools represented
+query: school_count is programs -> { group_by: school } -> { aggregate: how_many is count() }
+#" Distinct fields of study represented
+query: field_count is programs -> { group_by: field } -> { aggregate: how_many is count() }
+#" Distinct states represented
+query: state_count is programs -> { group_by: state } -> { aggregate: how_many is count() }
+
+#" Coverage by credential level
+query: coverage_by_level is programs -> {
+  group_by: credential
+  aggregate:
+    programs_at_level is program_count
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+  order_by: programs_at_level desc
+}

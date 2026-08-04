@@ -1,0 +1,62 @@
+##! experimental { access_modifiers givens }
+
+import "../index.malloy"
+
+// "I want to study X - where does it actually pay, and does the credential
+// level change the answer?" One field, compared across schools and levels.
+
+given:
+  # label="Field of study" control=select suggest { source=programs dimension=field }
+  FIELD :: filter<string> is f'Computer Science'
+
+#" This field, by credential level
+# artifact { title="Compare a field" }
+query: by_credential is programs -> {
+  where: field ~ $FIELD and state ~ $STATE and control ~ $CONTROL and grads_per_year ~ $MIN_GRADS
+  group_by: credential
+  aggregate:
+    programs_at_level is program_count
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: earnings desc
+}
+
+#" This field, by school type
+query: by_control is programs -> {
+  where: field ~ $FIELD and credential ~ $CREDENTIAL and state ~ $STATE and grads_per_year ~ $MIN_GRADS
+  group_by: control
+  aggregate:
+    programs_of_type is program_count
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+  order_by: earnings desc
+}
+
+#" Where this field pays best
+query: top_schools is programs -> {
+  where: field ~ $FIELD and credential ~ $CREDENTIAL and state ~ $STATE
+     and control ~ $CONTROL and grads_per_year ~ $MIN_GRADS
+  group_by: school, state, control
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: earnings desc
+  limit: 50
+}
+
+#" Which states have the most programs in this field
+query: by_state is programs -> {
+  where: field ~ $FIELD and credential ~ $CREDENTIAL and control ~ $CONTROL and grads_per_year ~ $MIN_GRADS
+  group_by: state
+  aggregate:
+    programs_in_state is program_count
+    earnings is med_earnings
+    ratio is avg_debt_ratio
+  order_by: programs_in_state desc
+  limit: 25
+}

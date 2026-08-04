@@ -1,0 +1,95 @@
+##! experimental { access_modifiers givens }
+
+import "storage.malloy"
+
+// ---------------------------------------------------------------------------
+// Controls shared across dashboards. Each dashboard adds its own on top.
+// ---------------------------------------------------------------------------
+given:
+  # label="Credential" control=select suggest { source=programs dimension=credential }
+  CREDENTIAL :: filter<string> is f'Bachelor\'s Degree'
+  # label="State" control=select suggest { source=programs dimension=state }
+  STATE :: filter<string> is f''
+  # label="School type" control=select suggest { source=programs dimension=control }
+  CONTROL :: filter<string> is f''
+  # label="Minimum graduates per year"
+  MIN_GRADS :: filter<number> is f'>= 0'
+
+// ---------------------------------------------------------------------------
+// The model.
+//
+// One row = one PROGRAM: a school x 4-digit CIP field x credential level.
+// Every row already carries BOTH a median-earnings and a median-debt figure -
+// build-data.sh drops the rest, because a program missing either side cannot be
+// ranked on value and a half-populated row would quietly skew every ranking.
+// ---------------------------------------------------------------------------
+#" US college programs: what graduates earn, and what they borrowed to get there
+source: programs is programs_table
+include {
+  public:
+    #" Institution name
+    # drill { to=["school-profile"] }
+    school,
+    #" Field of study (4-digit CIP)
+    # drill { to=["field-compare"] }
+    field,
+    #" Credential level awarded
+    credential,
+    #" Two-letter state code
+    state,
+    #" Public / Private nonprofit / Private for-profit
+    control,
+    *
+}
+extend {
+
+  dimension:
+    #" Typical graduates per year (average of the two reported award years)
+    grads_per_year is (coalesce(grads_yr1, 0) + coalesce(grads_yr2, 0)) / 2
+
+    // ---- The headline metric -------------------------------------------
+    // Debt as a multiple of one year's earnings. This is deliberately the
+    // gainful-employment-style ratio rather than an invented composite score:
+    // it is the measure regulators actually use, it needs no weighting choices
+    // we would have to defend, and it is directly interpretable.
+    // LOWER IS BETTER. 1.0 means a graduate owes exactly one year's pay.
+    #" Debt as a multiple of first-year earnings (lower is better)
+    debt_ratio is debt_median / earn_1yr
+
+    #" First-year earnings minus total borrowed (blunt, but the question people ask)
+    net_first_year is earn_1yr - debt_median
+
+    #" Earnings growth from year 1 to year 5, where both are reported
+    earnings_growth_5yr is earn_5yr - earn_1yr
+
+    // A plain-language band. The cut points are the ones the Department's own
+    // gainful-employment framing uses as a rough guide, exposed here as words
+    // rather than a number so a reader does not have to interpret a ratio.
+    // Binned ratio for the distribution chart. 0.25 buckets, capped at 3.0 so
+    // the long thin tail collapses into one readable "3+" bar instead of
+    // stretching the axis to the single worst program in the country.
+    #" Debt-to-earnings ratio, bucketed for the distribution chart
+    ratio_bin is
+      pick 3.0 when debt_ratio >= 3.0
+      else floor(debt_ratio * 4) / 4
+
+    #" Plain-language read on the debt-to-earnings ratio
+    debt_verdict is
+      pick 'No debt reported' when debt_median = 0
+      pick 'Light - under half a year of pay' when debt_ratio < 0.5
+      pick 'Moderate - under one year of pay'  when debt_ratio < 1.0
+      pick 'Heavy - one to two years of pay'   when debt_ratio < 2.0
+      else 'Very heavy - over two years of pay'
+
+  measure:
+    #" Number of programs matching
+    program_count is count()
+    #" Median first-year earnings across the matching programs
+    med_earnings is earn_1yr.avg()
+    #" Median debt across the matching programs
+    med_debt is debt_median.avg()
+    #" Average debt-to-earnings ratio across the matching programs
+    avg_debt_ratio is debt_ratio.avg()
+    #" Total graduates per year across the matching programs
+    total_grads is grads_per_year.sum()
+}

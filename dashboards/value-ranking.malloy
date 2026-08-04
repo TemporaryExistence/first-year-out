@@ -1,0 +1,107 @@
+##! experimental { access_modifiers givens }
+
+import "../index.malloy"
+
+// The headline dashboard: rank every program in the country by what graduates
+// owe relative to what they earn. This is the question the official College
+// Scorecard cannot answer - it is built to look up one school at a time.
+
+given:
+  # label="Field of study" suggest { source=programs dimension=field }
+  FIELD :: filter<string> is f''
+
+#" Headline numbers for the current selection
+# artifact { title="Value ranking" }
+query: headline is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS
+  aggregate:
+    programs_shown is program_count
+    typical_earnings is med_earnings
+    typical_debt is med_debt
+    typical_ratio is avg_debt_ratio
+    graduates is total_grads
+}
+
+#" Best value: lowest debt relative to earnings
+query: best_value is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+  group_by: school, field, credential, state, control
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: ratio asc
+  limit: 60
+}
+
+#" Heaviest debt load relative to earnings
+query: worst_value is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+  group_by: school, field, credential, state, control
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: ratio desc
+  limit: 60
+}
+
+#" How the selection splits across the plain-language debt bands
+query: verdict_split is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS
+  group_by: debt_verdict
+  aggregate:
+    programs_in_band is program_count
+    graduates_in_band is total_grads
+  order_by: programs_in_band desc
+}
+
+// ---------------------------------------------------------------------------
+// Chart feeds. These aggregate to FIELD level on purpose: "is nursing worth it"
+// is the question people actually have, and 22,000 individual program dots is
+// both unreadable and slow to render.
+// ---------------------------------------------------------------------------
+
+#" Every field of study as one point: what it pays vs what it costs
+query: field_scatter is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+  group_by: field
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+    programs_in_field is program_count
+  order_by: grads desc
+  limit: 300
+}
+
+#" The shape of the distribution: how many programs sit in each debt band
+query: ratio_distribution is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+  group_by: ratio_bin
+  aggregate: programs_in_bin is program_count
+  order_by: ratio_bin asc
+}
+
+#" The biggest fields by graduate volume - where most people actually are
+query: biggest_fields is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+  group_by: field
+  aggregate:
+    earnings is med_earnings
+    debt is med_debt
+    ratio is avg_debt_ratio
+    grads is total_grads
+  order_by: grads desc
+  limit: 18
+}

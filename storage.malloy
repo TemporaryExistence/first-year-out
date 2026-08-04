@@ -1,0 +1,10 @@
+// Where the data lives. Docs-local hosting: the parquet is committed inside
+// docs/ and served by GitHub Pages, and the BUNDLED SITE'S ROOT *IS* docs/ -
+// so the path here must be relative to the site root ('programs.parquet'),
+// NOT to the project root ('docs/programs.parquet').
+//
+// Getting this wrong fails SILENTLY and is worth knowing about: the page still
+// renders, every control works, and every tile just reads 0 / "no rows",
+// because the fetch 404s and nothing surfaces the error. Verified 2026-08-04 by
+// watching the HTTP log for a programs.parquet request that never came.
+source: programs_table is duckdb.table('programs.parquet') extend {}

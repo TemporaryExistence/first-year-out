@@ -1,0 +1,18 @@
+node_modules/
+data-src/
+.malloyyo/
+
+# Compile-time copy of the parquet at the project root. The PUBLISHED copy is
+# docs/programs.parquet and IS committed (GitHub Pages serves it). See
+# scripts/build-data.sh for why the same file exists in two places.
+/programs.parquet
+
+# --- internal, deliberately not published ---
+# Fleet-internal orientation card: references internal agent lanes, disciplines
+# and tooling pins that mean nothing outside our workspace.
+profile.md
+# Pre-change visual snapshots kept for our own iteration safety.
+.baseline-snapshots/
+# Local agent tooling.
+.claude/
+.mcp.json
