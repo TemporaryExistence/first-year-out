@@ -12,8 +12,11 @@ given:
   STATE :: filter<string> is f''
   # label="School type" control=select suggest { source=programs dimension=control }
   CONTROL :: filter<string> is f''
+  // Defaults to 10/yr rather than 0. A programme graduating a handful of people
+  // has a median that swings wildly, and with no floor the "heaviest debt" list
+  // led with exactly those. Clear the control to see everything.
   # label="Minimum graduates per year"
-  MIN_GRADS :: filter<number> is f'>= 0'
+  MIN_GRADS :: filter<number> is f'>= 10'
 
 // ---------------------------------------------------------------------------
 // The model.
@@ -59,6 +62,21 @@ extend {
     #" First-year earnings minus total borrowed (blunt, but the question people ask)
     net_first_year is earn_1yr - debt_median
 
+    // A ratio is abstract. A monthly payment is what actually lands in someone's
+    // bank account, so it is the number this site leads with. This is the
+    // DEPARTMENT'S own 10-year standard-repayment figure, not one we derived -
+    // which keeps "we add nothing but arithmetic" literally true.
+    #" Monthly payment on that debt, 10-year standard repayment (the Department's own figure)
+    monthly_cost is monthly_payment
+
+    #" Loan payments as a share of gross monthly pay
+    payment_share is (monthly_payment * 12) / earn_1yr
+
+    // The question a debt-to-pay ratio cannot answer: did the credential beat
+    // not having one? The Department's own benchmark, 5 years after finishing.
+    #" Share earning more than a typical high-school graduate, 5 years out
+    beat_hs is above_hs_n / above_hs_denom
+
     #" Earnings growth from year 1 to year 5, where both are reported
     earnings_growth_5yr is earn_5yr - earn_1yr
 
@@ -92,4 +110,18 @@ extend {
     avg_debt_ratio is debt_ratio.avg()
     #" Total graduates per year across the matching programs
     total_grads is grads_per_year.sum()
+    #" Typical monthly loan payment across the matching programs
+    med_payment is monthly_payment.avg()
+
+    // Ratios are aggregated as SEPARATE numerator and denominator sums, then
+    // divided at the point of display. Taking .avg() of a ratio-of-columns
+    // dimension gave 20116 and 50546.75 where DuckDB says 0.0806 and 0.8568 -
+    // caught 2026-08-04 by checking the rendered figures against the parquet.
+    // Summing the parts is also the more defensible statistic: it weights by
+    // graduates, so it describes PEOPLE rather than treating a 12-graduate
+    // program as equal to a 1,200-graduate one.
+    #" Graduates out-earning a high-school graduate (numerator)
+    above_hs_num is above_hs_n.sum()
+    #" Graduates measured for that comparison (denominator)
+    above_hs_den is above_hs_denom.sum()
 }

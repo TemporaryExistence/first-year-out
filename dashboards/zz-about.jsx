@@ -42,6 +42,15 @@ function useInk() {
 const n = (x) => (x == null || x === "" ? 0 : +x);
 const usd = (v) => "$" + Math.round(n(v)).toLocaleString();
 const ratio = (v) => n(v).toFixed(2) + "x";
+const pctFmt = (v) => Math.round(n(v) * 100) + "%";
+const perMonth = (v) => "$" + Math.round(n(v)).toLocaleString() + "/mo";
+// Only show legend entries that actually occur, so a chart of uniformly-green
+// dots stops advertising three bands the reader will never find on it.
+const bandsPresent = (rows) => BAND_DOMAIN.filter((b) => rows.some((r) => r.band === b));
+const bandScale = (rows) => {
+  const dom = bandsPresent(rows);
+  return { domain: dom, range: dom.map((d) => BAND_RANGE[BAND_DOMAIN.indexOf(d)]) };
+};
 
 function Card({ ink, title, note, children }) {
   return (
@@ -118,12 +127,18 @@ function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
       { data: { values: [{ x: lo, y: lo }, { x: hi, y: hi }] },
         mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
+      // Label the line ON the chart. A reader should not have to find a caption
+      // to learn what the only reference line in the picture means.
+      { data: { values: [{ x: hi * 0.72, y: hi * 0.72 }] },
+        mark: { type: "text", text: "break-even: debt = one year's pay", dy: -9, dx: -4,
+                align: "right", baseline: "bottom", angle: 0, fontSize: 11, color: ink.muted, opacity: 0.95 },
+        encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
       { mark: { type: "circle", opacity: 0.72 },
         encoding: {
           x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
           y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
           size: { field: "grads", type: "quantitative", scale: { range: [25, 700] }, legend: null },
-          color: { field: "band", type: "nominal", title: "Debt vs pay", scale: { domain: BAND_DOMAIN, range: BAND_RANGE } },
+          color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
           tooltip: [
             { field: labelField, title: "" },
             { field: "earnings", title: "Median pay", format: "$,.0f" },
@@ -222,7 +237,7 @@ function PageShell({ dark, children }) {
         background: dark ? FIELD_DARK : FIELD_LIGHT,
         backgroundRepeat: "no-repeat", backgroundSize: "100% 100%",
       }} />
-      <div style={{ position: "relative", zIndex: 1, display: "grid", gap: 14 }}>{children}</div>
+      <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>{children}</div>
     </div>
   );
 }
@@ -252,7 +267,7 @@ function Masthead({ ink, dark, title, kicker, blurb }) {
       <div style={{ position: "relative" }}>
         <div style={{ color: ink.muted, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", fontWeight: 600 }}>{kicker}</div>
         <h1 style={{ margin: "6px 0 0", color: ink.text, fontSize: 30, lineHeight: 1.12, letterSpacing: "-0.02em", fontWeight: 700 }}>{title}</h1>
-        <p style={{ margin: "8px 0 0", color: ink.muted, fontSize: 14, lineHeight: 1.55, maxWidth: 720 }}>{blurb}</p>
+        <p style={{ margin: "7px 0 0", color: ink.muted, fontSize: 14, lineHeight: 1.5, maxWidth: 620 }}>{blurb}</p>
       </div>
     </div>
   );
@@ -262,6 +277,9 @@ function Masthead({ ink, dark, title, kicker, blurb }) {
 // it sits on EVERY dashboard, and it is the thing that keeps this site honest
 // about making financial statements concerning named schools and named programs.
 function Disclaimer({ ink, dark }) {
+  const L = ({ children }) => (
+    <li style={{ margin: "0 0 3px" }}>{children}</li>
+  );
   return (
     <div style={{
       background: dark ? "rgba(28,24,20,0.62)" : "rgba(255,251,244,0.82)",
@@ -269,24 +287,21 @@ function Disclaimer({ ink, dark }) {
       borderLeft: `3px solid ${BAND.heavy}`,
       borderRadius: 10, padding: "13px 16px",
     }}>
-      <div style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, marginBottom: 5 }}>
-        Read this before you draw a conclusion
+      <div style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>
+        Not advice. Read before concluding anything.
       </div>
-      <div style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-        <b>This is not financial, career, or admissions advice.</b> It is a plain view of figures published
-        by the US Department of Education, and nothing here is a prediction of what any individual will earn
-        or owe. The figures cover <b>only graduates who received federal financial aid</b>, who were working
-        and not enrolled in further study, and for whom this was their highest credential - not everyone who
-        attended. <b>A median is not a promise:</b> half of graduates earned less than the number shown.
-        Programs with fewer than 30 reported graduates are suppressed by the Department, so smaller programs
-        are systematically absent and <b>a program missing from this site is evidence of nothing</b>. Figures
-        describe a cohort that finished several years ago and may not reflect a field as it stands today.
-        Earnings vary enormously within any one program by role, employer and location. Verify anything that
-        matters against the school and the{" "}
+      <ul style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, margin: 0, paddingLeft: 17 }}>
+        <L><b>A median is not a promise.</b> Half of graduates earned less.</L>
+        <L><b>Not everyone is counted</b> - only graduates who took federal aid, were working, and stopped studying.</L>
+        <L><b>Missing is not bad.</b> Programs under 30 graduates are withheld by the Department.</L>
+        <L><b>The figures lag.</b> This cohort finished years ago.</L>
+      </ul>
+      <div style={{ color: ink.muted, fontSize: 12, marginTop: 7 }}>
+        Independent; not affiliated with the Department of Education or any school named here.{" "}
+        <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Full limitations</a>
+        {" · "}
         <a href="https://collegescorecard.ed.gov/" target="_blank" rel="noopener noreferrer"
-           style={{ color: BAND.mod, textDecoration: "underline" }}>official College Scorecard</a> before
-        making a decision. This site is independent and is not affiliated with, or endorsed by, the US
-        Department of Education or any institution named on it.
+           style={{ color: BAND.mod, textDecoration: "underline" }}>Official Scorecard</a>
       </div>
     </div>
   );
@@ -391,9 +406,8 @@ function SourcesFull({ ink, dark }) {
 function SourceLine({ ink }) {
   return (
     <div style={{ color: ink.muted, fontSize: 12, lineHeight: 1.55 }}>
-      <b>Source:</b> US Department of Education, <i>College Scorecard - Most Recent Cohorts: Field of Study
-      and Institution</i>, release of {RELEASE.label} (accessed {RELEASE.accessed}). Public domain.{" "}
-      <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Full sources and method</a>.
+      <b>Source:</b> US Department of Education, College Scorecard, {RELEASE.label}. Public domain.{" "}
+      <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Sources and method</a>.
     </div>
   );
 }
@@ -408,20 +422,16 @@ function BuiltWith({ ink, dark }) {
   );
   return (
     <div style={{
-      display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "baseline",
+      display: "flex", flexWrap: "wrap", gap: "8px 16px", alignItems: "baseline",
       background: dark ? "rgba(22,26,36,0.60)" : "rgba(255,255,255,0.66)",
       border: `1px solid ${ink.line}`, borderRadius: 10, padding: "12px 16px",
     }}>
-      <span style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-        Built on Malloy
-      </span>
-      <span style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, flex: "1 1 420px", minWidth: 0 }}>
-        This whole site is a <A href="https://malloydata.dev">Malloy</A> semantic model and four dashboards,
-        compiled by <A href="https://github.com/malloydata/malloyyo">Malloyyo</A> into static pages that query
-        a Parquet file in your browser with DuckDB-WASM. No backend, no database server, almost no application
-        code - and because the query engine ships to you, nothing you do here is transmitted anywhere. Malloy
-        and Malloyyo are the work of Lloyd Tabb and the Malloy team; the pattern is the one shown by his{" "}
-        <A href="https://lloydtabb.github.io/wordfinder/">Word Finder</A>.
+      <span style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>Built on Malloy</span>
+      <span style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, flex: "1 1 380px", minWidth: 0 }}>
+        A <A href="https://www.malloydata.dev/">Malloy</A> model and four dashboards, compiled by{" "}
+        <A href="https://github.com/malloydata/malloyyo">Malloyyo</A> into static pages that query a Parquet
+        file in your browser. No backend - so nothing you do here is sent anywhere. By Lloyd Tabb and the
+        Malloy team, following his <A href="https://lloydtabb.github.io/wordfinder/">Word Finder</A>.
       </span>
     </div>
   );
@@ -451,7 +461,7 @@ export default function Dashboard({ dashboard, givens }) {
       <Masthead ink={ink} dark={ink.dark}
                 kicker="First Year Out"
                 title="Where these numbers come from, and what they cannot tell you"
-                blurb="This site makes financial statements about named schools and named programs. That obliges it to be exact about what the data is, who is counted in it, and where it stops being reliable." />
+                blurb="What the numbers are, who is counted, and where they stop being reliable." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 14, background: ink.surface, border: `1px solid ${ink.line}`, borderRadius: 10, padding: "14px 16px" }}>
         <Stat ink={ink} label="Programs" value={Math.round(n(c.total_programs)).toLocaleString()} />
         <Stat ink={ink} label="Schools" value={Math.round(one(sch)).toLocaleString()} />
@@ -462,25 +472,31 @@ export default function Dashboard({ dashboard, givens }) {
 
       <Card ink={ink} title="Where the numbers come from">
         <P ink={ink}>
-          Everything here is the US Department of Education's <b>College Scorecard</b>, field-of-study
-          release. Earnings come from Treasury/IRS records; debt comes from the National Student Loan
-          Data System. One row is one program: a school, a four-digit CIP field, and a credential level.
-          It is public-domain government data and this site adds no estimates of its own.
+          The US Department of Education's <b>College Scorecard</b>, field-of-study release. One row is one
+          program: a school, a four-digit CIP field, a credential level. Earnings from Treasury/IRS records,
+          debt from the National Student Loan Data System. Public domain; we add no estimates.
         </P>
         <P ink={ink}>
-          <b>Debt vs pay</b> is median debt divided by median first-year earnings. It is deliberately not
-          an invented score: it is the ratio regulators themselves use, it requires no weighting choices,
-          and 1.00x has a plain meaning - a graduate owes about one year's pay.
+          <b>Debt vs pay</b> is median debt over median first-year pay - the ratio regulators use, not a
+          score we invented. 1.00x means a graduate owes about a year's pay.
+        </P>
+        <H ink={ink}>The monthly payment</H>
+        <P ink={ink}>
+          The <b>Department's own</b> 10-year standard-repayment estimate, not one we derived. <b>Share of
+          pay</b> is twelve of those payments against median first-year pay. Reported for every program here.
+        </P>
+        <H ink={ink}>Beat a high-school graduate</H>
+        <P ink={ink}>
+          The Department's own benchmark, and the one thing a debt ratio cannot tell you: whether the
+          credential beat not having one. Reported for about 83% of programs here.
         </P>
       </Card>
 
       <Card ink={ink} title="Four things this data cannot tell you" note="Read these before drawing a conclusion about any specific program.">
         <H ink={ink}>1. It is not everyone - it is federally-aided graduates</H>
         <P ink={ink}>
-          Earnings cover graduates who received federal financial aid, were working, and were not
-          enrolled in further study during the measurement year, and for whom this was their highest
-          credential. Students who paid without federal aid are absent. At schools where few students
-          borrow, the reported figure describes a minority of the class.
+          Only graduates who took federal aid, were working, were not studying, and for whom this was their
+          highest credential. Where few students borrow, the figure describes a minority of the class.
         </P>
         <H ink={ink}>2. Small programs are missing, and not at random</H>
         <P ink={ink}>
@@ -491,27 +507,48 @@ export default function Dashboard({ dashboard, givens }) {
         </P>
         <H ink={ink}>3. The numbers describe the past, not your future</H>
         <P ink={ink}>
-          Earnings are pooled across award years and measured a few years after graduation, so the
-          cohort described here entered the job market well before today. A field that has changed
-          quickly since then will not look like its number.
+          Earnings are pooled across award years and measured a few years out, so this cohort entered the
+          job market well before today.
         </P>
         <H ink={ink}>4. A median is not a promise</H>
         <P ink={ink}>
-          Half of graduates earned less than the figure shown. Earnings vary enormously within a single
-          program by role, employer and location. Treat these as the shape of a distribution, never as
-          what an individual will earn.
+          Half of graduates earned less. Earnings vary enormously within one program by role, employer and
+          location. This is the shape of a distribution, not a forecast.
         </P>
       </Card>
 
       <Card ink={ink} title="Coverage by credential level" note="Queried live from the data this site loads.">
-        <Bars ink={ink} rows={lvlRows} accent={ACCENT} label={(r) => r.credential} value={(r) => r.programs_at_level} fmt={(v) => Math.round(n(v)).toLocaleString()} />
-        <div style={{ marginTop: 10, display: "grid", gap: 4 }}>
-          {lvlRows.map((r, i) => (
-            <div key={i} style={{ fontSize: 11, color: ink.muted, display: "flex", justifyContent: "space-between" }}>
-              <span>{r.credential}</span>
-              <span>{usd(r.earnings)} pay · {usd(r.debt)} debt · {ratio(r.ratio)}</span>
-            </div>
-          ))}
+        {/* RATER: this was a bar chart with a DETACHED list of numbers underneath,
+            so the reader had to match rows by position. One row per level now. */}
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12.5, minWidth: 520 }}>
+            <thead>
+              <tr style={{ color: ink.muted, textAlign: "left" }}>
+                {["Credential", "Programs", "Median pay", "Median debt", "Debt vs pay"].map((hd, i) => (
+                  <th key={hd} style={{ padding: "6px 8px", fontWeight: 600, borderBottom: `1px solid ${ink.line}`, textAlign: i ? "right" : "left", whiteSpace: "nowrap" }}>{hd}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lvlRows.map((r, i) => {
+                const maxP = Math.max(...lvlRows.map((x) => n(x.programs_at_level)), 1);
+                return (
+                  <tr key={i}>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${ink.line}`, color: ink.text }}>{r.credential}</td>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${ink.line}`, textAlign: "right", color: ink.text, whiteSpace: "nowrap" }}>
+                      <span style={{ display: "inline-block", width: 60, height: 6, background: ink.track, borderRadius: 3, marginRight: 8, verticalAlign: "middle", overflow: "hidden" }}>
+                        <span style={{ display: "block", width: `${(n(r.programs_at_level) / maxP) * 100}%`, height: "100%", background: ACCENT }} />
+                      </span>
+                      {Math.round(n(r.programs_at_level)).toLocaleString()}
+                    </td>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${ink.line}`, textAlign: "right", color: ink.muted, whiteSpace: "nowrap" }}>{usd(r.earnings)}</td>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${ink.line}`, textAlign: "right", color: ink.muted, whiteSpace: "nowrap" }}>{usd(r.debt)}</td>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${ink.line}`, textAlign: "right", color: n(r.ratio) < 1 ? BAND.light : n(r.ratio) < 2 ? ink.text : BAND.vheavy, fontWeight: 600, whiteSpace: "nowrap" }}>{ratio(r.ratio)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </Card>
 
@@ -521,10 +558,9 @@ export default function Dashboard({ dashboard, givens }) {
 
       <Card ink={ink} title="How it is built">
         <P ink={ink}>
-          A Malloy semantic model over a Parquet file, queried <b>entirely in your browser</b> with
-          DuckDB-WASM. There is no server and no database - the page fetches one data file and every
-          filter and ranking runs on your own machine. Nothing you type here is sent anywhere.
-          Built with <b>Malloyyo</b>.
+          A Malloy model over a Parquet file, queried <b>in your browser</b> with DuckDB-WASM. No server,
+          no database: the page fetches one file and every filter runs on your machine. Nothing is sent
+          anywhere. Built with <b>Malloyyo</b>.
         </P>
       </Card>
       <BuiltWith ink={ink} dark={ink.dark} />

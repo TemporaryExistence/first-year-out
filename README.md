@@ -17,7 +17,7 @@ Everything runs **in your browser**. No server, no database, no accounts, no tra
 
 ## Built on Malloy
 
-This project is **built on [Malloy](https://malloydata.dev) and [Malloyyo](https://github.com/malloydata/malloyyo)**,
+This project is **built on [Malloy](https://www.malloydata.dev/) and [Malloyyo](https://github.com/malloydata/malloyyo)**,
 and they are not a detail of the implementation - they are the spine of it.
 
 The entire application is a **semantic model plus four dashboards**. There is no backend, no API layer, no
@@ -32,6 +32,9 @@ A conventional build of this would have been a server, a database, a query API, 
 hosting bill. Here it is ~20 lines of semantic model, four dashboard files, and a static host.
 
 Malloy and Malloyyo are the work of **Lloyd Tabb** and the Malloy team.
+
+- **Malloy** - https://www.malloydata.dev/ (source: https://github.com/malloydata/malloy)
+- **Malloyyo** - https://github.com/malloydata/malloyyo
 
 The direct inspiration was Lloyd's own [Word Finder](https://lloydtabb.github.io/wordfinder/), which
 demonstrated this whole shape - semantic model → dashboards → static site → DuckDB-WASM in the browser.

@@ -11,7 +11,7 @@
 
 const REPO = "https://github.com/TemporaryExistence/first-year-out";
 const MALLOYYO = "https://github.com/malloydata/malloyyo";
-const MALLOY = "https://malloydata.dev";
+const MALLOY = "https://www.malloydata.dev/";
 const WORDFINDER = "https://lloydtabb.github.io/wordfinder/";
 const SCORECARD = "https://collegescorecard.ed.gov/data/";
 
@@ -111,7 +111,9 @@ body{
 .cards span{color:var(--muted);font-size:13px;line-height:1.5}
 .warn{border:1px solid var(--line);border-left:3px solid #d98324;border-radius:10px;padding:14px 16px;margin:26px 0 0;background:var(--card)}
 .warn .t{font-weight:700;font-size:13px;margin-bottom:5px}
-.warn p{font-size:12.5px;color:var(--muted);margin:0;line-height:1.62}
+.warn p{font-size:12.5px;color:var(--muted);margin:7px 0 0;line-height:1.6}
+.warn ul{font-size:12.5px;color:var(--muted);margin:0;padding-left:17px;line-height:1.55}
+.warn li{margin:0 0 3px}
 .spine{border:1px solid var(--line);border-radius:12px;padding:15px 17px;background:var(--card);margin-top:26px}
 .spine .t{font-weight:700;font-size:13.5px;margin-bottom:6px}
 .spine p{font-size:12.5px;color:var(--muted);margin:0 0 9px;line-height:1.62}
@@ -137,9 +139,8 @@ export default function Landing({ dashboards }) {
       <p className="kick">First Year Out</p>
       <h1>What a degree pays, against what it costs</h1>
       <p className="sub">
-        Every US college program, ranked by what graduates earned in their first year out against what
-        they borrowed to get there. The Department of Education publishes these numbers one school at a
-        time. This asks the question across all of them at once.
+        Every US college program, ranked by what graduates earned against what they borrowed. The
+        Department publishes these numbers one school at a time; this asks across all of them at once.
       </p>
 
       <ul className="stats">
@@ -163,45 +164,40 @@ export default function Landing({ dashboards }) {
       </ul>
 
       <div className="warn">
-        <div className="t">Read this before you draw a conclusion</div>
+        <div className="t">Not advice. Read before concluding anything.</div>
+        <ul>
+          <li><b>A median is not a promise.</b> Half of graduates earned less.</li>
+          <li><b>Not everyone is counted</b> - only graduates who took federal aid, were working, and stopped studying.</li>
+          <li><b>Missing is not bad.</b> Programs under 30 graduates are withheld by the Department.</li>
+          <li><b>The figures lag.</b> This cohort finished years ago.</li>
+        </ul>
         <p>
-          <b>This is not financial, career, or admissions advice.</b> It is a plain view of figures
-          published by the US Department of Education, and nothing here predicts what any individual will
-          earn or owe. The figures cover <b>only graduates who received federal financial aid</b>, who were
-          working and not enrolled in further study, and for whom this was their highest credential - not
-          everyone who attended. <b>A median is not a promise:</b> half of graduates earned less than the
-          number shown. Programs with fewer than 30 reported graduates are suppressed by the Department, so
-          smaller programs are systematically absent and <b>a program missing from this site is evidence of
-          nothing</b>. Figures describe a cohort that finished several years ago. Earnings vary enormously
-          within any one program by role, employer and location. Verify anything that matters against the
-          school and the <a href={SCORECARD} target="_blank" rel="noopener noreferrer">official College
-          Scorecard</a> before making a decision. This site is independent and is not affiliated with, or
-          endorsed by, the US Department of Education or any institution named on it.
+          Independent; not affiliated with the Department of Education or any school named here. Check
+          anything that matters against the school and the{" "}
+          <a href={SCORECARD} target="_blank" rel="noopener noreferrer">official Scorecard</a>.
         </p>
       </div>
 
       <div className="spine">
         <div className="t">Built on Malloy</div>
         <p>
-          This whole site is a <a href={MALLOY} target="_blank" rel="noopener noreferrer">Malloy</a> semantic
-          model and four dashboards, compiled by <a href={MALLOYYO} target="_blank" rel="noopener noreferrer">Malloyyo</a>{" "}
-          into static pages that query a Parquet file in your browser with DuckDB-WASM. No backend, no
-          database server, almost no application code - and because the query engine ships to you, nothing
-          you do here is transmitted anywhere.
+          A <a href={MALLOY} target="_blank" rel="noopener noreferrer">Malloy</a> model and four dashboards,
+          compiled by <a href={MALLOYYO} target="_blank" rel="noopener noreferrer">Malloyyo</a> into static
+          pages that query a Parquet file in your browser. No backend - so nothing you do here is sent
+          anywhere. By Lloyd Tabb and the Malloy team, following his{" "}
+          <a href={WORDFINDER} target="_blank" rel="noopener noreferrer">Word Finder</a>.
         </p>
         <p>
-          Malloy and Malloyyo are the work of Lloyd Tabb and the Malloy team. The pattern is the one shown
-          by his <a href={WORDFINDER} target="_blank" rel="noopener noreferrer">Word Finder</a>; this is that
-          pattern pointed at a higher-stakes dataset. Source:{" "}
-          <a href={REPO} target="_blank" rel="noopener noreferrer">the repo</a>.
+          Malloy: <a href={MALLOY} target="_blank" rel="noopener noreferrer">malloydata.dev</a>{" · "}
+          Malloyyo: <a href={MALLOYYO} target="_blank" rel="noopener noreferrer">github.com/malloydata/malloyyo</a>{" · "}
+          This project: <a href={REPO} target="_blank" rel="noopener noreferrer">the repo</a>.
         </p>
       </div>
 
       <p className="note">
-        <b>Source:</b> US Department of Education, College Scorecard - Most Recent Cohorts: Field of Study
-        and Institution, release of {RELEASE}. US Government work, public domain. Earnings derive from
-        Treasury/IRS administrative records, debt from the National Student Loan Data System, enrolment
-        from IPEDS. This site adds nothing but arithmetic and presentation.
+        <b>Source:</b> US Department of Education, College Scorecard, release of {RELEASE}. Public domain.
+        Earnings from Treasury/IRS records, debt from the National Student Loan Data System. This site adds
+        nothing but arithmetic and presentation.
       </p>
     </main>
   );

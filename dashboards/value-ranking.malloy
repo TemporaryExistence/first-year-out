@@ -21,6 +21,9 @@ query: headline is programs -> {
     typical_debt is med_debt
     typical_ratio is avg_debt_ratio
     graduates is total_grads
+    typical_payment is med_payment
+    beat_hs_num is above_hs_num
+    beat_hs_den is above_hs_den
 }
 
 #" Best value: lowest debt relative to earnings
@@ -33,6 +36,7 @@ query: best_value is programs -> {
     debt is med_debt
     ratio is avg_debt_ratio
     grads is total_grads
+    payment is med_payment
   order_by: ratio asc
   limit: 60
 }
@@ -47,6 +51,7 @@ query: worst_value is programs -> {
     debt is med_debt
     ratio is avg_debt_ratio
     grads is total_grads
+    payment is med_payment
   order_by: ratio desc
   limit: 60
 }
@@ -104,4 +109,19 @@ query: biggest_fields is programs -> {
     grads is total_grads
   order_by: grads desc
   limit: 18
+}
+
+#" Did the credential beat not having one? Biggest fields by share earning above a high-school graduate
+query: beat_hs_by_field is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and above_hs_denom > 0
+  group_by: field
+  aggregate:
+    share_num is above_hs_num
+    share_den is above_hs_den
+    earnings is med_earnings
+    payment is med_payment
+    grads is total_grads
+  order_by: grads desc
+  limit: 16
 }

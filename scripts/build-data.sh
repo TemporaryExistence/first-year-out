@@ -66,6 +66,20 @@ COPY (
       TRY_CAST(EARN_MDN_4YR AS DOUBLE)                AS earn_4yr,
       TRY_CAST(EARN_MDN_5YR AS DOUBLE)                AS earn_5yr,
       TRY_CAST(EARN_COUNT_WNE_HI_1YR AS INTEGER)      AS earn_n,
+      -- The Department's OWN 10-year standard monthly payment on that debt. Using
+      -- their figure rather than deriving one keeps this site's "we add nothing
+      -- but arithmetic" claim literally true.
+      TRY_CAST(DEBT_ALL_STGP_EVAL_MDN10YRPAY AS DOUBLE) AS monthly_payment,
+      -- Share earning more than a typical high-school graduate, 5 years out.
+      -- This is the Department's own benchmark and answers the question a ratio
+      -- cannot: did the credential beat not having one?
+      TRY_CAST(EARN_GT_THRESHOLD_5YR AS DOUBLE)       AS above_hs_n,
+      TRY_CAST(EARN_COUNT_WNE_5YR AS DOUBLE)          AS above_hs_denom,
+      -- NOT CARRIED: the BBRR* repayment-outcome columns (default, delinquency,
+      -- paid-in-full). Measured 2026-08-04: only 418 of 38,869 corpus rows (1%)
+      -- survive suppression at this grain, so a panel built on them would be
+      -- empty for essentially every program a reader looks up. Checked before
+      -- building, not after.
       TRY_CAST(IPEDSCOUNT1 AS INTEGER)                AS grads_yr1,
       TRY_CAST(IPEDSCOUNT2 AS INTEGER)                AS grads_yr2
     FROM read_csv('${FOS}', header=true, all_varchar=true, ignore_errors=true)
@@ -74,7 +88,8 @@ COPY (
     f.school, i.state, i.city, f.control,
     f.field, f.cip_code, f.credential, f.cred_level,
     f.debt_median, f.earn_1yr, f.earn_2yr, f.earn_4yr, f.earn_5yr,
-    f.earn_n, f.grads_yr1, f.grads_yr2
+    f.earn_n, f.grads_yr1, f.grads_yr2,
+    f.monthly_payment, f.above_hs_n, f.above_hs_denom
   FROM fos f
   LEFT JOIN inst i USING (unitid)
   -- The corpus IS the rows where both sides of the question are answerable.

@@ -52,6 +52,15 @@ function useInk() {
 const n = (x) => (x == null || x === "" ? 0 : +x);
 const usd = (v) => "$" + Math.round(n(v)).toLocaleString();
 const ratio = (v) => n(v).toFixed(2) + "x";
+const pctFmt = (v) => Math.round(n(v) * 100) + "%";
+const perMonth = (v) => "$" + Math.round(n(v)).toLocaleString() + "/mo";
+// Only show legend entries that actually occur, so a chart of uniformly-green
+// dots stops advertising three bands the reader will never find on it.
+const bandsPresent = (rows) => BAND_DOMAIN.filter((b) => rows.some((r) => r.band === b));
+const bandScale = (rows) => {
+  const dom = bandsPresent(rows);
+  return { domain: dom, range: dom.map((d) => BAND_RANGE[BAND_DOMAIN.indexOf(d)]) };
+};
 
 function Card({ ink, title, note, children }) {
   return (
@@ -128,12 +137,18 @@ function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
       { data: { values: [{ x: lo, y: lo }, { x: hi, y: hi }] },
         mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
+      // Label the line ON the chart. A reader should not have to find a caption
+      // to learn what the only reference line in the picture means.
+      { data: { values: [{ x: hi * 0.72, y: hi * 0.72 }] },
+        mark: { type: "text", text: "break-even: debt = one year's pay", dy: -9, dx: -4,
+                align: "right", baseline: "bottom", angle: 0, fontSize: 11, color: ink.muted, opacity: 0.95 },
+        encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
       { mark: { type: "circle", opacity: 0.72 },
         encoding: {
           x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
           y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
           size: { field: "grads", type: "quantitative", scale: { range: [25, 700] }, legend: null },
-          color: { field: "band", type: "nominal", title: "Debt vs pay", scale: { domain: BAND_DOMAIN, range: BAND_RANGE } },
+          color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
           tooltip: [
             { field: labelField, title: "" },
             { field: "earnings", title: "Median pay", format: "$,.0f" },
@@ -232,7 +247,7 @@ function PageShell({ dark, children }) {
         background: dark ? FIELD_DARK : FIELD_LIGHT,
         backgroundRepeat: "no-repeat", backgroundSize: "100% 100%",
       }} />
-      <div style={{ position: "relative", zIndex: 1, display: "grid", gap: 14 }}>{children}</div>
+      <div style={{ position: "relative", zIndex: 1, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>{children}</div>
     </div>
   );
 }
@@ -262,7 +277,7 @@ function Masthead({ ink, dark, title, kicker, blurb }) {
       <div style={{ position: "relative" }}>
         <div style={{ color: ink.muted, fontSize: 11, letterSpacing: ".14em", textTransform: "uppercase", fontWeight: 600 }}>{kicker}</div>
         <h1 style={{ margin: "6px 0 0", color: ink.text, fontSize: 30, lineHeight: 1.12, letterSpacing: "-0.02em", fontWeight: 700 }}>{title}</h1>
-        <p style={{ margin: "8px 0 0", color: ink.muted, fontSize: 14, lineHeight: 1.55, maxWidth: 720 }}>{blurb}</p>
+        <p style={{ margin: "7px 0 0", color: ink.muted, fontSize: 14, lineHeight: 1.5, maxWidth: 620 }}>{blurb}</p>
       </div>
     </div>
   );
@@ -272,6 +287,9 @@ function Masthead({ ink, dark, title, kicker, blurb }) {
 // it sits on EVERY dashboard, and it is the thing that keeps this site honest
 // about making financial statements concerning named schools and named programs.
 function Disclaimer({ ink, dark }) {
+  const L = ({ children }) => (
+    <li style={{ margin: "0 0 3px" }}>{children}</li>
+  );
   return (
     <div style={{
       background: dark ? "rgba(28,24,20,0.62)" : "rgba(255,251,244,0.82)",
@@ -279,24 +297,21 @@ function Disclaimer({ ink, dark }) {
       borderLeft: `3px solid ${BAND.heavy}`,
       borderRadius: 10, padding: "13px 16px",
     }}>
-      <div style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, marginBottom: 5 }}>
-        Read this before you draw a conclusion
+      <div style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>
+        Not advice. Read before concluding anything.
       </div>
-      <div style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.6 }}>
-        <b>This is not financial, career, or admissions advice.</b> It is a plain view of figures published
-        by the US Department of Education, and nothing here is a prediction of what any individual will earn
-        or owe. The figures cover <b>only graduates who received federal financial aid</b>, who were working
-        and not enrolled in further study, and for whom this was their highest credential - not everyone who
-        attended. <b>A median is not a promise:</b> half of graduates earned less than the number shown.
-        Programs with fewer than 30 reported graduates are suppressed by the Department, so smaller programs
-        are systematically absent and <b>a program missing from this site is evidence of nothing</b>. Figures
-        describe a cohort that finished several years ago and may not reflect a field as it stands today.
-        Earnings vary enormously within any one program by role, employer and location. Verify anything that
-        matters against the school and the{" "}
+      <ul style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, margin: 0, paddingLeft: 17 }}>
+        <L><b>A median is not a promise.</b> Half of graduates earned less.</L>
+        <L><b>Not everyone is counted</b> - only graduates who took federal aid, were working, and stopped studying.</L>
+        <L><b>Missing is not bad.</b> Programs under 30 graduates are withheld by the Department.</L>
+        <L><b>The figures lag.</b> This cohort finished years ago.</L>
+      </ul>
+      <div style={{ color: ink.muted, fontSize: 12, marginTop: 7 }}>
+        Independent; not affiliated with the Department of Education or any school named here.{" "}
+        <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Full limitations</a>
+        {" · "}
         <a href="https://collegescorecard.ed.gov/" target="_blank" rel="noopener noreferrer"
-           style={{ color: BAND.mod, textDecoration: "underline" }}>official College Scorecard</a> before
-        making a decision. This site is independent and is not affiliated with, or endorsed by, the US
-        Department of Education or any institution named on it.
+           style={{ color: BAND.mod, textDecoration: "underline" }}>Official Scorecard</a>
       </div>
     </div>
   );
@@ -401,9 +416,8 @@ function SourcesFull({ ink, dark }) {
 function SourceLine({ ink }) {
   return (
     <div style={{ color: ink.muted, fontSize: 12, lineHeight: 1.55 }}>
-      <b>Source:</b> US Department of Education, <i>College Scorecard - Most Recent Cohorts: Field of Study
-      and Institution</i>, release of {RELEASE.label} (accessed {RELEASE.accessed}). Public domain.{" "}
-      <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Full sources and method</a>.
+      <b>Source:</b> US Department of Education, College Scorecard, {RELEASE.label}. Public domain.{" "}
+      <a href="zz-about.html" style={{ color: BAND.mod, textDecoration: "underline" }}>Sources and method</a>.
     </div>
   );
 }
@@ -418,20 +432,16 @@ function BuiltWith({ ink, dark }) {
   );
   return (
     <div style={{
-      display: "flex", flexWrap: "wrap", gap: "10px 18px", alignItems: "baseline",
+      display: "flex", flexWrap: "wrap", gap: "8px 16px", alignItems: "baseline",
       background: dark ? "rgba(22,26,36,0.60)" : "rgba(255,255,255,0.66)",
       border: `1px solid ${ink.line}`, borderRadius: 10, padding: "12px 16px",
     }}>
-      <span style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>
-        Built on Malloy
-      </span>
-      <span style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, flex: "1 1 420px", minWidth: 0 }}>
-        This whole site is a <A href="https://malloydata.dev">Malloy</A> semantic model and four dashboards,
-        compiled by <A href="https://github.com/malloydata/malloyyo">Malloyyo</A> into static pages that query
-        a Parquet file in your browser with DuckDB-WASM. No backend, no database server, almost no application
-        code - and because the query engine ships to you, nothing you do here is transmitted anywhere. Malloy
-        and Malloyyo are the work of Lloyd Tabb and the Malloy team; the pattern is the one shown by his{" "}
-        <A href="https://lloydtabb.github.io/wordfinder/">Word Finder</A>.
+      <span style={{ color: ink.text, fontSize: 12.5, fontWeight: 700, whiteSpace: "nowrap" }}>Built on Malloy</span>
+      <span style={{ color: ink.muted, fontSize: 12.5, lineHeight: 1.55, flex: "1 1 380px", minWidth: 0 }}>
+        A <A href="https://www.malloydata.dev/">Malloy</A> model and four dashboards, compiled by{" "}
+        <A href="https://github.com/malloydata/malloyyo">Malloyyo</A> into static pages that query a Parquet
+        file in your browser. No backend - so nothing you do here is sent anywhere. By Lloyd Tabb and the
+        Malloy team, following his <A href="https://lloydtabb.github.io/wordfinder/">Word Finder</A>.
       </span>
     </div>
   );
@@ -453,8 +463,18 @@ export default function Dashboard({ dashboard, givens }) {
   const big = useQuery({ query: "biggest_fields", givens });
 
   const h = (head.rows || [])[0] || {};
+  // Divide at the point of display, from separately-aggregated parts.
+  const payShare = n(h.typical_earnings) > 0 ? (n(h.typical_payment) * 12) / n(h.typical_earnings) : 0;
+  const beatNum = n(h.beat_hs_num), beatDen = n(h.beat_hs_den);
   const bestRows = (best.rows || []).slice(0, 12);
   const worstRows = (worst.rows || []).slice(0, 12);
+  const beat = useQuery({ query: "beat_hs_by_field", givens });
+  const beatRows = (beat.rows || [])
+    .filter((r) => n(r.share_den) > 0)
+    .map((r) => ({
+      field: r.field, share: n(r.share_num) / n(r.share_den), earnings: n(r.earnings),
+      payment: n(r.payment), grads: n(r.grads),
+    }));
   const bandRows = bands.rows || [];
   const bandTotal = bandRows.reduce((a, r) => a + n(r.programs_in_band), 0);
 
@@ -497,7 +517,7 @@ export default function Dashboard({ dashboard, givens }) {
       <Masthead ink={ink} dark={ink.dark}
                 kicker="First Year Out"
                 title="What a degree pays, against what it costs"
-                blurb="Every college program in America, ranked by what graduates earned in their first year out against what they borrowed to get there. The government publishes these numbers one school at a time. This asks the question across all of them at once." />
+                blurb="Every US college program, ranked by what graduates earned against what they borrowed." />
       <Controls>
         <Given name="CREDENTIAL" />
         <Given name="FIELD" />
@@ -509,13 +529,14 @@ export default function Dashboard({ dashboard, givens }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14, background: ink.surface, border: `1px solid ${ink.line}`, borderRadius: 10, padding: "14px 16px" }}>
         <Stat ink={ink} label="Programs" value={Math.round(n(h.programs_shown)).toLocaleString()} sub="matching your filters" />
         <Stat ink={ink} label="Typical pay" value={usd(h.typical_earnings)} sub="median, 1 year after" />
-        <Stat ink={ink} label="Typical debt" value={usd(h.typical_debt)} sub="median borrowed" />
-        <Stat ink={ink} label="Debt vs pay" value={ratio(h.typical_ratio)} sub="1.00x = one year's earnings" />
+        <Stat ink={ink} label="The loan payment" value={perMonth(h.typical_payment)} sub={`${usd(h.typical_debt)} over 10 years`} />
+        <Stat ink={ink} label="Share of pay" value={pctFmt(payShare)} sub="of gross pay, to the loan" />
+        <Stat ink={ink} label="Beat high school" value={beatDen > 0 ? pctFmt(beatNum / beatDen) : "n/a"} sub="out-earn a HS graduate, 5 yrs" />
         <Stat ink={ink} label="Graduates / yr" value={Math.round(n(h.graduates)).toLocaleString()} sub="across these programs" />
       </div>
 
       <Card ink={ink} title="What each field pays, against what it costs"
-            note="One dot per field of study. The diagonal is break-even - one year's pay equals the debt. Below the line, graduates owe more than they make in a year. Dot size is graduates per year.">
+            note="One dot per field. Size is graduates per year. Below the dashed line, debt exceeds a year of pay.">
         {pts.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Nothing matches these filters.</div> : (
           <Chart ink={ink} height={380} data={pts} spec={{
             layer: [
@@ -527,7 +548,7 @@ export default function Dashboard({ dashboard, givens }) {
                   x: { field: "debt", type: "quantitative", title: "Median debt", scale: { domain: [0, axisMax], nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
                   y: { field: "earnings", type: "quantitative", title: "Median pay, 1 year after", scale: { domain: [0, axisMax], nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
                   size: { field: "grads", type: "quantitative", title: "Graduates / yr", scale: { range: [20, 900] }, legend: null },
-                  color: { field: "band", type: "nominal", title: "Debt vs pay", scale: { domain: BAND_DOMAIN, range: BAND_RANGE } },
+                  color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
                   tooltip: [
                     { field: "field", title: "Field" },
                     { field: "earnings", title: "Median pay", format: "$,.0f" },
@@ -543,7 +564,7 @@ export default function Dashboard({ dashboard, givens }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(360px,1fr))", gap: 14 }}>
         <Card ink={ink} title="The shape of it"
-              note="How many programs sit at each debt level. Most of the mass is on the left; the harm is in the tail.">
+              note="Programs at each debt level.">
           {distRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No data.</div> : (
             <Chart ink={ink} height={230} data={distRows} spec={{
               mark: { type: "bar", cornerRadiusEnd: 2, width: { band: 0.82 } },
@@ -578,7 +599,7 @@ export default function Dashboard({ dashboard, givens }) {
         </Card>
 
         <Card ink={ink} title="Where people actually are"
-              note="The biggest fields by graduates per year. Each line runs from what they borrow to what they earn - longer and further right is better.">
+              note="Biggest fields by graduates. Each line runs debt to pay.">
           {dumbbell.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No data.</div> : (
             <Chart ink={ink} height={Math.max(230, bigOrder.length * 22)} data={dumbbell} spec={{
               encoding: {
@@ -603,11 +624,39 @@ export default function Dashboard({ dashboard, givens }) {
         </Card>
       </div>
 
+      <Card ink={ink} title="Did the credential beat not having one?"
+            note="Out-earning a typical high-school graduate, five years on. Dashed line is the average here.">
+        {beatRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Not reported for this selection.</div> : (
+          <Chart ink={ink} height={Math.max(230, beatRows.length * 24)} data={beatRows} spec={{
+            layer: [
+              { mark: { type: "bar", cornerRadiusEnd: 2, color: BAND.mod, opacity: 0.9 },
+                encoding: {
+                  y: { field: "field", type: "nominal", title: null, sort: beatRows.map((r) => r.field), axis: { labelLimit: 230 } },
+                  x: { field: "share", type: "quantitative", title: "Share out-earning a high-school graduate",
+                       scale: { domain: [0, 1] }, axis: { format: ".0%" } },
+                  tooltip: [
+                    { field: "field", title: "Field" },
+                    { field: "share", title: "Beat a HS graduate", format: ".0%" },
+                    { field: "earnings", title: "Median pay", format: "$,.0f" },
+                    { field: "payment", title: "Monthly payment", format: "$,.0f" },
+                    { field: "grads", title: "Graduates / yr", format: ",.0f" },
+                  ],
+                } },
+              // A rule at the all-programme median, so a bar reads as better or
+              // worse than typical rather than just "long".
+              { data: { values: [{ m: beatRows.reduce((a, r) => a + r.share, 0) / Math.max(1, beatRows.length) }] },
+                mark: { type: "rule", color: ink.text, opacity: 0.55, strokeDash: [4, 3] },
+                encoding: { x: { field: "m", type: "quantitative" } } },
+            ],
+          }} />
+        )}
+      </Card>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14 }}>
-        <Card ink={ink} title="Lightest debt relative to pay" note="Ranked by debt as a multiple of first-year pay - NOT by pay itself, and not a judgement of quality. A low-debt, low-pay program can outrank a high-pay one. Click a field or school to dig in.">
+        <Card ink={ink} title="Lightest debt relative to pay" note="By debt as a multiple of pay, not by pay. A low-debt, low-pay program can rank high.">
           <RankList ink={ink} rows={bestRows} accent={BAND.light} go={go} />
         </Card>
-        <Card ink={ink} title="Heaviest debt relative to pay" note="Where debt most outweighs first-year pay. Check the cohort size: a program graduating a handful of people a year has an unstable median.">
+        <Card ink={ink} title="Heaviest debt relative to pay" note="Where debt most outweighs pay. Small cohorts give unstable medians.">
           <RankList ink={ink} rows={worstRows} accent={BAND.vheavy} go={go} />
         </Card>
       </div>
@@ -641,7 +690,7 @@ function RankList({ ink, rows, accent, go }) {
           <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
             <div style={{ color: accent, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{ratio(r.ratio)}</div>
             <div style={{ color: ink.muted, fontSize: 11 }}>
-              {usd(r.earnings)} pay · {usd(r.debt)} debt
+              {usd(r.earnings)} pay · {n(r.payment) > 0 ? perMonth(r.payment) : usd(r.debt) + " debt"}
               {n(r.grads) > 0 && <> · <span title="Graduates per year. A small cohort makes any median unstable.">{Math.round(n(r.grads)).toLocaleString()}/yr</span></>}
             </div>
           </div>
