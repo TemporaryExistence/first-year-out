@@ -113,6 +113,22 @@ function Chart({ ink, spec, data, height }) {
 
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
+// True only when the pay and debt ranges overlap, i.e. when y = x actually
+// crosses the visible plot. When every programme out-earns its debt the line has
+// nowhere to sit - which is itself worth saying, but NOT worth captioning as if
+// a line were there.
+function breakEvenVisible(pts) {
+  const span = (vals) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad), hi + pad];
+  };
+  const xd = span(pts.map((p) => p.debt)), yd = span(pts.map((p) => p.earnings));
+  return Math.min(xd[1], yd[1]) > Math.max(xd[0], yd[0]);
+}
+
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
   // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
   // 45-degree geometry but, because pay runs far higher than debt, left most of
@@ -467,6 +483,10 @@ export default function Dashboard({ dashboard, givens }) {
   const lvl = useQuery({ query: "coverage_by_level", givens });
   const c = (cov.rows || [])[0] || {};
   const one = (q) => n(((q.rows || [])[0] || {}).how_many);
+  // Until the first rows arrive every tile reads 0, which on the page that
+  // exists to establish credibility looks like a site with no data in it.
+  const loading = !(cov.rows && cov.rows.length);
+  const show = (v) => (loading ? "—" : v);
   const lvlRows = lvl.rows || [];
 
   return (
@@ -476,11 +496,11 @@ export default function Dashboard({ dashboard, givens }) {
                 title="Where these numbers come from, and what they cannot tell you"
                 blurb="What the numbers are, who is counted, and where they stop being reliable." />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 14, background: ink.surface, border: `1px solid ${ink.line}`, borderRadius: 10, padding: "14px 16px" }}>
-        <Stat ink={ink} label="Programs" value={Math.round(n(c.total_programs)).toLocaleString()} />
-        <Stat ink={ink} label="Schools" value={Math.round(one(sch)).toLocaleString()} />
-        <Stat ink={ink} label="Fields of study" value={Math.round(one(fld)).toLocaleString()} />
-        <Stat ink={ink} label="States & territories" value={Math.round(one(sta)).toLocaleString()} />
-        <Stat ink={ink} label="Graduates / yr" value={Math.round(n(c.graduates)).toLocaleString()} />
+        <Stat ink={ink} label="Programs" value={show(Math.round(n(c.total_programs)).toLocaleString())} />
+        <Stat ink={ink} label="Schools" value={show(Math.round(one(sch)).toLocaleString())} />
+        <Stat ink={ink} label="Fields of study" value={show(Math.round(one(fld)).toLocaleString())} />
+        <Stat ink={ink} label="States & territories" value={show(Math.round(one(sta)).toLocaleString())} />
+        <Stat ink={ink} label="Graduates / yr" value={show(Math.round(n(c.graduates)).toLocaleString())} />
       </div>
 
       <Card ink={ink} title="Where the numbers come from">

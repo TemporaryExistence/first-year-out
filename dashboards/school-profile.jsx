@@ -114,6 +114,22 @@ function Chart({ ink, spec, data, height }) {
 
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
+// True only when the pay and debt ranges overlap, i.e. when y = x actually
+// crosses the visible plot. When every programme out-earns its debt the line has
+// nowhere to sit - which is itself worth saying, but NOT worth captioning as if
+// a line were there.
+function breakEvenVisible(pts) {
+  const span = (vals) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad), hi + pad];
+  };
+  const xd = span(pts.map((p) => p.debt)), yd = span(pts.map((p) => p.earnings));
+  return Math.min(xd[1], yd[1]) > Math.max(xd[0], yd[0]);
+}
+
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
   // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
   // 45-degree geometry but, because pay runs far higher than debt, left most of
@@ -502,15 +518,14 @@ export default function Dashboard({ dashboard, givens }) {
                    spec={payVsDebtSpec({ ink, pts, xTitle: "Median debt", yTitle: "Median pay, 1 year after", labelField: "field" })} />}
       </Card>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14 }}>
-        <Card ink={ink} title="What this school offers" note="Programs by level, coloured by debt weight.">
+      <Card ink={ink} title="What this school offers" note="Programs by level, coloured by debt weight.">
           {lvlDb.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No data.</div> : (
             <Chart ink={ink} height={Math.max(170, lvlRows.length * 34)} data={lvlDb.map((d) => ({ ...d, band: bandOf(d.ratio) }))} spec={{
               mark: { type: "bar", cornerRadiusEnd: 2 },
               encoding: {
                 y: { field: "cat", type: "nominal", title: null, sort: "-x", axis: { labelLimit: 200 } },
                 x: { field: "amount", type: "quantitative", title: "Reported programs" },
-                color: { field: "band", type: "nominal", title: "Debt vs pay", scale: { domain: BAND_DOMAIN, range: BAND_RANGE } },
+                color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(lvlDb.map((d) => ({ band: bandOf(d.ratio) }))) },
                 tooltip: [
                   { field: "cat", title: "Level" },
                   { field: "amount", title: "Programs", format: ",.0f" },
@@ -522,7 +537,7 @@ export default function Dashboard({ dashboard, givens }) {
           )}
         </Card>
 
-        <Card ink={ink} title="Best value here" note="Lowest debt against pay first.">
+      <Card ink={ink} title="Lightest debt relative to pay" note="By debt as a multiple of pay, not by pay. Not a judgement of quality.">
           <div style={{ display: "grid", gap: 0 }}>
             {rows.length === 0 && <div style={{ color: ink.muted, fontSize: 13 }}>No programs match.</div>}
             {rows.slice(0, 15).map((r, i) => (
@@ -539,9 +554,8 @@ export default function Dashboard({ dashboard, givens }) {
                 </div>
               </div>
             ))}
-          </div>
-        </Card>
-      </div>
+        </div>
+      </Card>
 
       <Disclaimer ink={ink} dark={ink.dark} />
       <BuiltWith ink={ink} dark={ink.dark} />

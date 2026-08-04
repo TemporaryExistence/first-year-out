@@ -115,6 +115,22 @@ function Chart({ ink, spec, data, height }) {
 
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
+// True only when the pay and debt ranges overlap, i.e. when y = x actually
+// crosses the visible plot. When every programme out-earns its debt the line has
+// nowhere to sit - which is itself worth saying, but NOT worth captioning as if
+// a line were there.
+function breakEvenVisible(pts) {
+  const span = (vals) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad), hi + pad];
+  };
+  const xd = span(pts.map((p) => p.debt)), yd = span(pts.map((p) => p.earnings));
+  return Math.min(xd[1], yd[1]) > Math.max(xd[0], yd[0]);
+}
+
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
   // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
   // 45-degree geometry but, because pay runs far higher than debt, left most of
@@ -464,6 +480,10 @@ export default function Dashboard({ dashboard, givens }) {
 
   const lvlRows = lvl.rows || [], ctlRows = ctl.rows || [], stRows = st.rows || [];
   const topRows = top.rows || [];
+  const stateRows = (st.rows || []).map((r) => ({
+    state: r.state || "(unknown)", programs: n(r.programs_in_state),
+    earnings: n(r.earnings), ratio: n(r.ratio), band: bandOf(n(r.ratio)),
+  }));
 
   // Dumbbells: one line per category running debt -> pay.
   const mkDumbbell = (rows, key) => {
@@ -534,7 +554,9 @@ export default function Dashboard({ dashboard, givens }) {
       </div>
 
       <Card ink={ink} title="Every school teaching this field"
-            note="One dot per school. Below the dashed line, debt exceeds a year of pay.">
+            note={schoolPts.length && breakEvenVisible(schoolPts)
+              ? "One dot per school. Below the dashed line, debt exceeds a year of pay."
+              : "One dot per school. Every school here out-earns its debt inside a year, so the break-even line sits off the chart."}>
         {schoolPts.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No programs match these filters.</div>
           : <Chart ink={ink} height={340} data={schoolPts}
                    spec={payVsDebtSpec({ ink, pts: schoolPts, xTitle: "Median debt", yTitle: "Median pay, 1 year after", labelField: "school" })} />}
@@ -563,14 +585,12 @@ export default function Dashboard({ dashboard, givens }) {
 
         <Card ink={ink} title="Where this field is taught" note="Reported programs by state.">
           {stRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>No data.</div> : (
-            <Chart ink={ink} height={Math.max(200, stRows.length * 20)} data={stRows.map((r) => ({
-              state: r.state || "(unknown)", programs: n(r.programs_in_state), earnings: n(r.earnings), ratio: n(r.ratio), band: bandOf(n(r.ratio)),
-            }))} spec={{
+            <Chart ink={ink} height={Math.max(200, stRows.length * 20)} data={stateRows} spec={{
               mark: { type: "bar", cornerRadiusEnd: 2 },
               encoding: {
                 y: { field: "state", type: "nominal", title: null, sort: "-x" },
                 x: { field: "programs", type: "quantitative", title: "Reported programs" },
-                color: { field: "band", type: "nominal", title: "Debt vs pay", scale: { domain: BAND_DOMAIN, range: BAND_RANGE } },
+                color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(stateRows) },
                 tooltip: [
                   { field: "state", title: "State" },
                   { field: "programs", title: "Programs", format: ",.0f" },

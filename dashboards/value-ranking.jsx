@@ -123,6 +123,22 @@ function Chart({ ink, spec, data, height }) {
 
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
+// True only when the pay and debt ranges overlap, i.e. when y = x actually
+// crosses the visible plot. When every programme out-earns its debt the line has
+// nowhere to sit - which is itself worth saying, but NOT worth captioning as if
+// a line were there.
+function breakEvenVisible(pts) {
+  const span = (vals) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad), hi + pad];
+  };
+  const xd = span(pts.map((p) => p.debt)), yd = span(pts.map((p) => p.earnings));
+  return Math.min(xd[1], yd[1]) > Math.max(xd[0], yd[0]);
+}
+
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
   // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
   // 45-degree geometry but, because pay runs far higher than debt, left most of
@@ -752,10 +768,11 @@ export default function Dashboard({ dashboard, givens }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(340px,1fr))", gap: 14 }}>
         <Card ink={ink} title="Lightest debt relative to pay" note="By debt as a multiple of pay, not by pay. A low-debt, low-pay program can rank high.">
-          <RankList ink={ink} rows={bestRows} accent={BAND.light} go={go} />
+          <RankList ink={ink} rows={bestRows} accent={BAND.light} go={go} basisLabel="vs year-1 pay" />
         </Card>
-        <Card ink={ink} title="Heaviest debt relative to pay" note="Where debt most outweighs FIRST-year pay. Check the year-5 figure: fields that feed graduate school look far worse at year one than they are.">
-          <RankList ink={ink} rows={worstRows} accent={BAND.vheavy} go={go} />
+        <Card ink={ink} title="Heaviest debt relative to pay"
+              note="Ranked on FIFTH-year pay, not the first job. Ranking on year one put fields that feed graduate school at the top purely because those graduates were still studying. Programs with no year-5 figure are not listed.">
+          <RankList ink={ink} rows={worstRows} accent={BAND.vheavy} go={go} useFive />
         </Card>
       </div>
 
@@ -766,7 +783,7 @@ export default function Dashboard({ dashboard, givens }) {
   );
 }
 
-function RankList({ ink, rows, accent, go }) {
+function RankList({ ink, rows, accent, go, useFive, basisLabel }) {
   if (!rows.length) return <div style={{ color: ink.muted, fontSize: 13 }}>No programs match these filters.</div>;
   return (
     <div style={{ display: "grid", gap: 0 }}>
@@ -786,7 +803,10 @@ function RankList({ ink, rows, accent, go }) {
             >{r.school}{r.state ? ` · ${r.state}` : ""}</div>
           </div>
           <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-            <div style={{ color: accent, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{ratio(r.ratio)}</div>
+            <div style={{ color: accent, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+              {ratio(useFive && n(r.ratio5) > 0 ? r.ratio5 : r.ratio)}
+            </div>
+            <div style={{ color: ink.muted, fontSize: 10 }}>{useFive ? "vs year-5 pay" : basisLabel}</div>
             <div style={{ color: ink.muted, fontSize: 11 }}>
               {usd(r.earnings)} yr1{n(r.earnings_5yr) > 0 ? " → " + usd(r.earnings_5yr) + " yr5" : ""} · {n(r.payment) > 0 ? perMonth(r.payment) : usd(r.debt) + " debt"}
               {n(r.grads) > 0 && <> · <span title="Graduates per year. A small cohort makes any median unstable.">{Math.round(n(r.grads)).toLocaleString()}/yr</span></>}

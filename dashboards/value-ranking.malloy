@@ -40,14 +40,24 @@ query: best_value is programs -> {
     grads is total_grads
     payment is med_payment
     earnings_5yr is med_earn_5yr
+    ratio5 is avg_debt_ratio_5yr
   order_by: ratio asc
   limit: 60
 }
 
-#" Heaviest debt load relative to earnings
+// RANKED ON THE FIVE-YEAR FIGURE, deliberately. Ranking the heaviest-debt list
+// on year-one pay put Communication Disorders at Commonwealth University of PA
+// at rank 1 in the country on a $4,880 median - a figure that mostly measures
+// graduates who were still in a master's programme. Those graduates earn about
+// $70,300 by year five. Naming a real institution as the worst in the country on
+// an artefact of measurement timing is not a disclosure problem to be footnoted;
+// it is a ranking problem. Programs without a five-year figure (about 12%) are
+// excluded here rather than ranked on a basis that misrepresents them.
+#" Heaviest debt load relative to FIFTH-year earnings
 query: worst_value is programs -> {
   where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
      and field ~ $FIELD and grads_per_year ~ $MIN_GRADS and debt_median > 0
+     and earn_5yr != null
   group_by: school, field, credential, state, control
   aggregate:
     earnings is med_earnings
@@ -56,7 +66,8 @@ query: worst_value is programs -> {
     grads is total_grads
     payment is med_payment
     earnings_5yr is med_earn_5yr
-  order_by: ratio desc
+    ratio5 is avg_debt_ratio_5yr
+  order_by: ratio5 desc
   limit: 60
 }
 
