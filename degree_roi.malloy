@@ -80,6 +80,15 @@ extend {
     #" Earnings growth from year 1 to year 5, where both are reported
     earnings_growth_5yr is earn_5yr - earn_1yr
 
+    // Year 1 is a FIRST JOB, not a career. Median pay rises 59% between year 1
+    // and year 5, and the rise is wildly uneven: fields that normally feed into
+    // graduate school (speech pathology, biology, neuroscience) look catastrophic
+    // at year 1 because many of those graduates are still studying. Carrying the
+    // 5-year figure is the only career-length signal this dataset has at this
+    // grain, and without it the site defames exactly those fields.
+    #" Debt as a multiple of FIFTH-year earnings (lower is better)
+    debt_ratio_5yr is debt_median / earn_5yr
+
     // A plain-language band. The cut points are the ones the Department's own
     // gainful-employment framing uses as a rough guide, exposed here as words
     // rather than a number so a reader does not have to interpret a ratio.
@@ -112,6 +121,10 @@ extend {
     total_grads is grads_per_year.sum()
     #" Typical monthly loan payment across the matching programs
     med_payment is monthly_payment.avg()
+    #" Median pay five years after finishing
+    med_earn_5yr is earn_5yr.avg()
+    #" Debt against fifth-year pay
+    avg_debt_ratio_5yr is debt_ratio_5yr.avg()
 
     // Ratios are aggregated as SEPARATE numerator and denominator sums, then
     // divided at the point of display. Taking .avg() of a ratio-of-columns

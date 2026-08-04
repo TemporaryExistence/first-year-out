@@ -24,6 +24,8 @@ query: headline is programs -> {
     typical_payment is med_payment
     beat_hs_num is above_hs_num
     beat_hs_den is above_hs_den
+    typical_earnings_5yr is med_earn_5yr
+    typical_ratio_5yr is avg_debt_ratio_5yr
 }
 
 #" Best value: lowest debt relative to earnings
@@ -37,6 +39,7 @@ query: best_value is programs -> {
     ratio is avg_debt_ratio
     grads is total_grads
     payment is med_payment
+    earnings_5yr is med_earn_5yr
   order_by: ratio asc
   limit: 60
 }
@@ -52,6 +55,7 @@ query: worst_value is programs -> {
     ratio is avg_debt_ratio
     grads is total_grads
     payment is med_payment
+    earnings_5yr is med_earn_5yr
   order_by: ratio desc
   limit: 60
 }
@@ -122,6 +126,21 @@ query: beat_hs_by_field is programs -> {
     earnings is med_earnings
     payment is med_payment
     grads is total_grads
+  order_by: grads desc
+  limit: 16
+}
+
+#" Year one is a first job, not a career: how pay moves between year 1 and year 5
+query: career_climb is programs -> {
+  where: credential ~ $CREDENTIAL and state ~ $STATE and control ~ $CONTROL
+     and field ~ $FIELD and grads_per_year ~ $MIN_GRADS
+     and earn_5yr != null and earn_1yr != null
+  group_by: field
+  aggregate:
+    year1 is med_earnings
+    year5 is med_earn_5yr
+    grads is total_grads
+    programs_in_field is program_count
   order_by: grads desc
   limit: 16
 }

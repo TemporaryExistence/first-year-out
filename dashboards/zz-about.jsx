@@ -114,29 +114,42 @@ function Chart({ ink, spec, data, height }) {
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
-  const vals = pts.flatMap((p) => [p.debt, p.earnings]).sort((a, b) => a - b);
-  const pct = (q) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * q))] : 1);
-  const hi = Math.max(1000, pct(0.98)) * 1.06;
-  // Zoom the shared window to the data rather than anchoring at $0: a field where
-  // pay far exceeds debt otherwise leaves ~75% of the plot empty. Both axes still
-  // share ONE domain, so the 45-degree line keeps meaning "one year's pay".
-  const lo = Math.max(0, pct(0.02) * 0.75);
-  const dom = [lo, hi];
+  // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
+  // 45-degree geometry but, because pay runs far higher than debt, left most of
+  // the plot empty - the dots crushed into a corner of a mostly blank square.
+  // The break-even reference is still exactly y = x; it is drawn from the real
+  // overlap of the two ranges, so it stays truthful at whatever angle it lands.
+  const span = (vals, padLo, padHi) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad * padLo), hi + pad * padHi];
+  };
+  const xd = span(pts.map((p) => p.debt), 1, 1);
+  const yd = span(pts.map((p) => p.earnings), 1, 1);
+  // The y = x line only exists where the two ranges overlap.
+  const a = Math.max(xd[0], yd[0]), b = Math.min(xd[1], yd[1]);
+  const diag = b > a ? [{ x: a, y: a }, { x: b, y: b }] : [];
+  const shade = b > a ? [{ x: a, yTop: a, yBot: yd[0] }, { x: b, yTop: b, yBot: yd[0] }] : [];
+  const labelPos = b > a ? (a + b) / 2 : null;
   return {
     layer: [
-      { data: { values: [{ x: lo, y: lo }, { x: hi, y: hi }] },
-        mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
+      { data: { values: shade },
+        mark: { type: "area", color: BAND.vheavy, opacity: 0.08, line: false },
+        encoding: { x: { field: "x", type: "quantitative" },
+                    y: { field: "yTop", type: "quantitative" }, y2: { field: "yBot" } } },
+      { data: { values: diag },
+        mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.75 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
-      // Label the line ON the chart. A reader should not have to find a caption
-      // to learn what the only reference line in the picture means.
-      { data: { values: [{ x: hi * 0.72, y: hi * 0.72 }] },
-        mark: { type: "text", text: "break-even: debt = one year's pay", dy: -9, dx: -4,
-                align: "right", baseline: "bottom", angle: 0, fontSize: 11, color: ink.muted, opacity: 0.95 },
+      { data: { values: labelPos == null ? [] : [{ x: b, y: b }] },
+        mark: { type: "text", text: "break-even: debt = a year of pay", dy: -6, dx: -2,
+                align: "right", baseline: "bottom", fontSize: 10.5, color: ink.muted, opacity: 0.9 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
       { mark: { type: "circle", opacity: 0.72 },
         encoding: {
-          x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
-          y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
+          x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: xd, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
+          y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: yd, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
           size: { field: "grads", type: "quantitative", scale: { range: [25, 700] }, legend: null },
           color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
           tooltip: [
@@ -505,10 +518,18 @@ export default function Dashboard({ dashboard, givens }) {
           figure are loaded here. That systematically removes small programs - so absence from this site
           is not evidence of anything about a program.
         </P>
-        <H ink={ink}>3. The numbers describe the past, not your future</H>
+        <H ink={ink}>3. Five years is as far as this data sees</H>
         <P ink={ink}>
-          Earnings are pooled across award years and measured a few years out, so this cohort entered the
-          job market well before today.
+          The Department publishes earnings at one year and at five years after finishing, by field. It does
+          not publish a career. That matters more than it sounds: median pay rises about <b>60% between year
+          one and year five</b>, and the rise is very uneven. Fields that normally feed into graduate school
+          look catastrophic at year one because many of those graduates were still studying - speech
+          pathology graduates show about $4,900 at year one and roughly $70,000 at year five.
+        </P>
+        <P ink={ink}>
+          So the site shows <b>both horizons everywhere</b>, and any ranking on the year-one figure should be
+          read with the year-five figure beside it. Neither is a career. Earnings are also pooled across
+          award years, so this cohort entered the job market well before today.
         </P>
         <H ink={ink}>4. A median is not a promise</H>
         <P ink={ink}>

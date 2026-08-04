@@ -124,29 +124,42 @@ function Chart({ ink, spec, data, height }) {
 // A square pay-vs-debt scatter with the break-even diagonal. Both axes MUST
 // share one scale or the 45-degree line stops meaning "one year's pay".
 function payVsDebtSpec({ ink, pts, xTitle, yTitle, labelField }) {
-  const vals = pts.flatMap((p) => [p.debt, p.earnings]).sort((a, b) => a - b);
-  const pct = (q) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * q))] : 1);
-  const hi = Math.max(1000, pct(0.98)) * 1.06;
-  // Zoom the shared window to the data rather than anchoring at $0: a field where
-  // pay far exceeds debt otherwise leaves ~75% of the plot empty. Both axes still
-  // share ONE domain, so the 45-degree line keeps meaning "one year's pay".
-  const lo = Math.max(0, pct(0.02) * 0.75);
-  const dom = [lo, hi];
+  // Each axis is fitted to ITS OWN data. Forcing one shared domain kept the
+  // 45-degree geometry but, because pay runs far higher than debt, left most of
+  // the plot empty - the dots crushed into a corner of a mostly blank square.
+  // The break-even reference is still exactly y = x; it is drawn from the real
+  // overlap of the two ranges, so it stays truthful at whatever angle it lands.
+  const span = (vals, padLo, padHi) => {
+    const v = vals.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad * padLo), hi + pad * padHi];
+  };
+  const xd = span(pts.map((p) => p.debt), 1, 1);
+  const yd = span(pts.map((p) => p.earnings), 1, 1);
+  // The y = x line only exists where the two ranges overlap.
+  const a = Math.max(xd[0], yd[0]), b = Math.min(xd[1], yd[1]);
+  const diag = b > a ? [{ x: a, y: a }, { x: b, y: b }] : [];
+  const shade = b > a ? [{ x: a, yTop: a, yBot: yd[0] }, { x: b, yTop: b, yBot: yd[0] }] : [];
+  const labelPos = b > a ? (a + b) / 2 : null;
   return {
     layer: [
-      { data: { values: [{ x: lo, y: lo }, { x: hi, y: hi }] },
-        mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
+      { data: { values: shade },
+        mark: { type: "area", color: BAND.vheavy, opacity: 0.08, line: false },
+        encoding: { x: { field: "x", type: "quantitative" },
+                    y: { field: "yTop", type: "quantitative" }, y2: { field: "yBot" } } },
+      { data: { values: diag },
+        mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.75 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
-      // Label the line ON the chart. A reader should not have to find a caption
-      // to learn what the only reference line in the picture means.
-      { data: { values: [{ x: hi * 0.72, y: hi * 0.72 }] },
-        mark: { type: "text", text: "break-even: debt = one year's pay", dy: -9, dx: -4,
-                align: "right", baseline: "bottom", angle: 0, fontSize: 11, color: ink.muted, opacity: 0.95 },
+      { data: { values: labelPos == null ? [] : [{ x: b, y: b }] },
+        mark: { type: "text", text: "break-even: debt = a year of pay", dy: -6, dx: -2,
+                align: "right", baseline: "bottom", fontSize: 10.5, color: ink.muted, opacity: 0.9 },
         encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
       { mark: { type: "circle", opacity: 0.72 },
         encoding: {
-          x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
-          y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: dom, nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
+          x: { field: "debt", type: "quantitative", title: xTitle, scale: { domain: xd, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
+          y: { field: "earnings", type: "quantitative", title: yTitle, scale: { domain: yd, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
           size: { field: "grads", type: "quantitative", scale: { range: [25, 700] }, legend: null },
           color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
           tooltip: [
@@ -466,6 +479,8 @@ export default function Dashboard({ dashboard, givens }) {
   // Divide at the point of display, from separately-aggregated parts.
   const payShare = n(h.typical_earnings) > 0 ? (n(h.typical_payment) * 12) / n(h.typical_earnings) : 0;
   const beatNum = n(h.beat_hs_num), beatDen = n(h.beat_hs_den);
+  const climb = n(h.typical_earnings) > 0 && n(h.typical_earnings_5yr) > 0
+    ? Math.round(((n(h.typical_earnings_5yr) - n(h.typical_earnings)) / n(h.typical_earnings)) * 100) : 0;
   const bestRows = (best.rows || []).slice(0, 12);
   const worstRows = (worst.rows || []).slice(0, 12);
   const beat = useQuery({ query: "beat_hs_by_field", givens });
@@ -475,6 +490,11 @@ export default function Dashboard({ dashboard, givens }) {
       field: r.field, share: n(r.share_num) / n(r.share_den), earnings: n(r.earnings),
       payment: n(r.payment), grads: n(r.grads),
     }));
+  const climbQ = useQuery({ query: "career_climb", givens });
+  const climbRows = (climbQ.rows || [])
+    .filter((r) => n(r.year1) > 0 && n(r.year5) > 0)
+    .map((r) => ({ field: r.field, year1: n(r.year1), year5: n(r.year5),
+                   growth: (n(r.year5) - n(r.year1)) / n(r.year1) }));
   const bandRows = bands.rows || [];
   const bandTotal = bandRows.reduce((a, r) => a + n(r.programs_in_band), 0);
 
@@ -486,9 +506,19 @@ export default function Dashboard({ dashboard, givens }) {
   // outlier field otherwise squeezes every other dot into the corner. The
   // diagonal only reads as "break-even" if BOTH axes share one scale, so this
   // is one number used twice, never two independent scales.
-  const vals = pts.flatMap((p) => [p.debt, p.earnings]).sort((a, b) => a - b);
-  const pct = (q) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(vals.length * q))] : 1);
-  const axisMax = Math.max(1000, pct(0.98)) * 1.08;
+  // Fit each axis to its own data. A single shared domain kept the diagonal at
+  // 45 degrees but, since pay runs far above debt, left most of the plot blank.
+  const spanOf = (arr) => {
+    const v = arr.filter((x) => isFinite(x)).sort((a, b) => a - b);
+    if (!v.length) return [0, 1];
+    const q = (p) => v[Math.min(v.length - 1, Math.max(0, Math.floor(v.length * p)))];
+    const lo = q(0.01), hi = q(0.99), pad = Math.max(1, (hi - lo) * 0.06);
+    return [Math.max(0, lo - pad), hi + pad];
+  };
+  const xDom = spanOf(pts.map((p) => p.debt));
+  const yDom = spanOf(pts.map((p) => p.earnings));
+  const dLo = Math.max(xDom[0], yDom[0]), dHi = Math.min(xDom[1], yDom[1]);
+  const hasDiag = dHi > dLo;
 
   // Bins are rendered as an ORDINAL axis, not a quantitative binned one.
   // Vega-Lite's {binned:true} + x2 encoding drew nothing here; an ordinal axis
@@ -503,6 +533,10 @@ export default function Dashboard({ dashboard, givens }) {
       band: bandOf(b),
     };
   }).sort((a, b) => a.bin - b.bin);
+  // Trim empty bins off both ends: the axis previously ran out to "3x+" through
+  // a stretch of bars with no programs in them.
+  while (distRows.length && distRows[0].programs === 0) distRows.shift();
+  while (distRows.length && distRows[distRows.length - 1].programs === 0) distRows.pop();
   const binOrder = distRows.map((d) => d.label);
   // Where the MIDDLE programme sits. A distribution only teaches if the reader
   // can find "typical" on it, so the median bin is marked on the chart.
@@ -533,7 +567,8 @@ export default function Dashboard({ dashboard, givens }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 14, background: ink.surface, border: `1px solid ${ink.line}`, borderRadius: 10, padding: "14px 16px" }}>
         <Stat ink={ink} label="Programs" value={Math.round(n(h.programs_shown)).toLocaleString()} sub="matching your filters" />
-        <Stat ink={ink} label="Typical pay" value={usd(h.typical_earnings)} sub="median, 1 year after" />
+        <Stat ink={ink} label="Pay, year 1" value={usd(h.typical_earnings)} sub="the first job" />
+        <Stat ink={ink} label="Pay, year 5" value={usd(h.typical_earnings_5yr)} sub={climb ? `+${climb}% by year five` : "median"} />
         <Stat ink={ink} label="The loan payment" value={perMonth(h.typical_payment)} sub={`${usd(h.typical_debt)} over 10 years`} />
         <Stat ink={ink} label="Share of pay" value={pctFmt(payShare)} sub="of gross pay, to the loan" />
         <Stat ink={ink} label="Beat high school" value={beatDen > 0 ? pctFmt(beatNum / beatDen) : "n/a"} sub="out-earn a HS graduate, 5 yrs" />
@@ -545,29 +580,29 @@ export default function Dashboard({ dashboard, givens }) {
         {pts.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Nothing matches these filters.</div> : (
           <Chart ink={ink} height={380} data={pts} spec={{
             layer: [
-              { data: { values: [{ x: 0, yTop: 0, yBot: 0 }, { x: axisMax, yTop: axisMax, yBot: 0 }] },
+              { data: { values: hasDiag ? [{ x: dLo, yTop: dLo, yBot: yDom[0] }, { x: dHi, yTop: dHi, yBot: yDom[0] }] : [] },
                 mark: { type: "area", color: BAND.vheavy, opacity: 0.08, line: false },
                 encoding: { x: { field: "x", type: "quantitative" },
                             y: { field: "yTop", type: "quantitative" }, y2: { field: "yBot" } } },
-              { data: { values: [{ x: 0, y: 0 }, { x: axisMax, y: axisMax }] },
-                mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.7 },
+              { data: { values: hasDiag ? [{ x: dLo, y: dLo }, { x: dHi, y: dHi }] : [] },
+                mark: { type: "line", strokeDash: [5, 4], color: ink.muted, opacity: 0.75 },
                 encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
-              { data: { values: [{ x: axisMax * 0.04, y: axisMax * 0.94 }] },
+              { data: { values: [{ x: xDom[0] + (xDom[1] - xDom[0]) * 0.03, y: yDom[1] - (yDom[1] - yDom[0]) * 0.03 }] },
                 mark: { type: "text", text: "pay beats debt", align: "left", baseline: "top",
                         fontSize: 11, fontWeight: 600, color: BAND.light, opacity: 0.92 },
                 encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
-              { data: { values: [{ x: axisMax * 0.97, y: axisMax * 0.06 }] },
+              { data: { values: hasDiag ? [{ x: dHi, y: yDom[0] + (yDom[1] - yDom[0]) * 0.03 }] : [] },
                 mark: { type: "text", text: "debt exceeds a year of pay", align: "right", baseline: "bottom",
                         fontSize: 11, fontWeight: 600, color: BAND.vheavy, opacity: 0.85 },
                 encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
-              { data: { values: [{ x: axisMax * 0.62, y: axisMax * 0.62 }] },
-                mark: { type: "text", text: "break-even", dy: -7, align: "right", baseline: "bottom",
+              { data: { values: hasDiag ? [{ x: dHi, y: dHi }] : [] },
+                mark: { type: "text", text: "break-even", dy: -6, dx: -2, align: "right", baseline: "bottom",
                         fontSize: 10.5, color: ink.muted, opacity: 0.9 },
                 encoding: { x: { field: "x", type: "quantitative" }, y: { field: "y", type: "quantitative" } } },
               { mark: { type: "circle", opacity: 0.72 },
                 encoding: {
-                  x: { field: "debt", type: "quantitative", title: "Median debt", scale: { domain: [0, axisMax], nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
-                  y: { field: "earnings", type: "quantitative", title: "Median pay, 1 year after", scale: { domain: [0, axisMax], nice: false }, axis: { format: "$.2~s", tickCount: 6 } },
+                  x: { field: "debt", type: "quantitative", title: "Median debt", scale: { domain: xDom, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
+                  y: { field: "earnings", type: "quantitative", title: "Median pay, 1 year after", scale: { domain: yDom, nice: false, clamp: true }, axis: { format: "$.2~s", tickCount: 6 } },
                   size: { field: "grads", type: "quantitative", title: "Graduates / yr", scale: { range: [20, 900] }, legend: null },
                   color: { field: "band", type: "nominal", title: "Debt vs pay", scale: bandScale(pts) },
                   tooltip: [
@@ -657,6 +692,36 @@ export default function Dashboard({ dashboard, givens }) {
         </Card>
       </div>
 
+      <Card ink={ink} title="Year one is a first job, not a career"
+            note="The same fields at one year and at five. Where the gap is widest, the year-one figure is measuring people who were still studying.">
+        {climbRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Not reported for this selection.</div> : (
+          <Chart ink={ink} height={Math.max(240, climbRows.length * 26)}
+                 data={climbRows.flatMap((r) => ([
+                   { field: r.field, kind: "Year 1", amount: r.year1, growth: r.growth },
+                   { field: r.field, kind: "Year 5", amount: r.year5, growth: r.growth },
+                 ]))}
+                 spec={{
+                   encoding: {
+                     y: { field: "field", type: "nominal", title: null, sort: climbRows.map((r) => r.field), axis: { labelLimit: 230 } },
+                     x: { field: "amount", type: "quantitative", title: "Median pay", axis: { format: "$.2~s", tickCount: 6 } },
+                   },
+                   layer: [
+                     { mark: { type: "line", color: ink.muted, opacity: 0.5, strokeWidth: 2 }, encoding: { detail: { field: "field", type: "nominal" } } },
+                     { mark: { type: "point", filled: true, size: 95, opacity: 0.95 },
+                       encoding: {
+                         color: { field: "kind", type: "nominal", title: null, scale: { domain: ["Year 1", "Year 5"], range: [BAND.heavy, BAND.light] } },
+                         tooltip: [
+                           { field: "field", title: "Field" },
+                           { field: "kind", title: "" },
+                           { field: "amount", title: "Median pay", format: "$,.0f" },
+                           { field: "growth", title: "Growth to year 5", format: ".0%" },
+                         ],
+                       } },
+                   ],
+                 }} />
+        )}
+      </Card>
+
       <Card ink={ink} title="Did the credential beat not having one?"
             note="Out-earning a typical high-school graduate, five years on. Dashed line is the average here.">
         {beatRows.length === 0 ? <div style={{ color: ink.muted, fontSize: 13 }}>Not reported for this selection.</div> : (
@@ -689,7 +754,7 @@ export default function Dashboard({ dashboard, givens }) {
         <Card ink={ink} title="Lightest debt relative to pay" note="By debt as a multiple of pay, not by pay. A low-debt, low-pay program can rank high.">
           <RankList ink={ink} rows={bestRows} accent={BAND.light} go={go} />
         </Card>
-        <Card ink={ink} title="Heaviest debt relative to pay" note="Where debt most outweighs pay. Small cohorts give unstable medians.">
+        <Card ink={ink} title="Heaviest debt relative to pay" note="Where debt most outweighs FIRST-year pay. Check the year-5 figure: fields that feed graduate school look far worse at year one than they are.">
           <RankList ink={ink} rows={worstRows} accent={BAND.vheavy} go={go} />
         </Card>
       </div>
@@ -723,7 +788,7 @@ function RankList({ ink, rows, accent, go }) {
           <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
             <div style={{ color: accent, fontSize: 14, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{ratio(r.ratio)}</div>
             <div style={{ color: ink.muted, fontSize: 11 }}>
-              {usd(r.earnings)} pay · {n(r.payment) > 0 ? perMonth(r.payment) : usd(r.debt) + " debt"}
+              {usd(r.earnings)} yr1{n(r.earnings_5yr) > 0 ? " → " + usd(r.earnings_5yr) + " yr5" : ""} · {n(r.payment) > 0 ? perMonth(r.payment) : usd(r.debt) + " debt"}
               {n(r.grads) > 0 && <> · <span title="Graduates per year. A small cohort makes any median unstable.">{Math.round(n(r.grads)).toLocaleString()}/yr</span></>}
             </div>
           </div>
